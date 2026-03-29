@@ -530,7 +530,7 @@ Claude snapshots files before every edit. You can:
 
 ### 8.1 CLAUDE.md Security Policy
 
-Add a security section to your project's `CLAUDE.md` (see [Section 10.4](#104-claudemd--the-projects-source-of-truth) for the full CLAUDE.md template):
+Add a security section to your project's `CLAUDE.md` (see [Section 11.4](#114-claudemd--the-projects-source-of-truth) for the full CLAUDE.md template):
 
 ```markdown
 # Security Requirements
@@ -1260,7 +1260,7 @@ Extended thinking lets Claude reason internally before responding. Worth it for 
 
 ### 12.4 Custom Subagents
 
-Beyond the built-in subagents used for context isolation (see [Section 10.3](#103-surviving-context-compression)), you can create custom ones in `.claude/agents/code-reviewer.md`:
+Beyond the built-in subagents used for context isolation (see [Section 11.3](#113-surviving-context-compression)), you can create custom ones in `.claude/agents/code-reviewer.md`:
 
 ```yaml
 ---
@@ -1406,7 +1406,7 @@ claude mcp list              # list all
 
 **Strategies ranked by impact:**
 
-1. **`/clear` between unrelated tasks** and **`/compact` proactively** (see [Section 10.3](#103-surviving-context-compression))
+1. **`/clear` between unrelated tasks** and **`/compact` proactively** (see [Section 11.3](#113-surviving-context-compression))
 2. **Use Sonnet by default** — switch to Opus only when reasoning depth matters
 3. **Delegate verbose operations to subagents** — test output stays in their context, not yours
 4. **Disable unused MCP servers** — `/mcp` to check per-server context cost
@@ -1463,7 +1463,7 @@ List differences and fix them."
 
 ### 12.12 Common Pitfalls and Fixes
 
-See also [Section 10.7](#107-keeping-claude-grounded-in-reality) for anti-hallucination strategies.
+See also [Section 11.7](#117-keeping-claude-grounded-in-reality) for anti-hallucination strategies.
 
 | Pitfall | Symptom | Fix |
 |---------|---------|-----|
