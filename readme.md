@@ -1582,6 +1582,8 @@ Based on CSA Agentic Trust Framework:
 }
 ```
 
+Optional: Add network-layer traffic scanning with `pipelock claude setup` (see [Section 9](#9-network-layer-traffic-scanning-with-pipelock)).
+
 ### Recommended Security (Team)
 
 `.claude/settings.json` (committed to repo):
@@ -1636,6 +1638,10 @@ Based on CSA Agentic Trust Framework:
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/security-validator.sh"
+          },
+          {
+            "type": "command",
+            "command": "pipelock hook scan --format claude"
           }
         ]
       }
@@ -1643,6 +1649,8 @@ Based on CSA Agentic Trust Framework:
   }
 }
 ```
+
+Consider using the `claude-code.yaml` Pipelock preset for team-wide network-layer scanning (see [Section 9](#9-network-layer-traffic-scanning-with-pipelock)).
 
 ### Maximum Security (Enterprise/Regulated)
 
@@ -1654,6 +1662,8 @@ Add to the above:
 - DevContainer with custom firewall for all development
 - Mandatory human code review for all AI-generated changes
 - SAST/DAST scanning in CI pipeline
+- Pipelock with forward proxy mode for full HTTPS content inspection
+- Pipelock MCP proxy wrapping for bidirectional MCP traffic scanning
 
 ---
 
