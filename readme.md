@@ -20,12 +20,13 @@ This project is licenced under the BSD 2-Clause Licence. In short: do whatever y
 6. [Layer 4 — Hooks & Policy Enforcement](#6-layer-4--hooks--policy-enforcement)
 7. [Layer 5 — Audit & Monitoring](#7-layer-5--audit--monitoring)
 8. [Layer 6 — Governance & Code Quality Gates](#8-layer-6--governance--code-quality-gates)
-9. [Reducing Approval Fatigue Safely](#9-reducing-approval-fatigue-safely)
-10. [Context, Memory & Session Management](#10-context-memory--session-management)
-11. [Usage Tips & Performance](#11-usage-tips--performance)
-12. [Security Frameworks Reference](#12-security-frameworks-reference)
-13. [Quick-Start Secure Configuration](#13-quick-start-secure-configuration)
-14. [References](#14-references)
+9. [Network-Layer Traffic Scanning with Pipelock](#9-network-layer-traffic-scanning-with-pipelock)
+10. [Reducing Approval Fatigue Safely](#10-reducing-approval-fatigue-safely)
+11. [Context, Memory & Session Management](#11-context-memory--session-management)
+12. [Usage Tips & Performance](#12-usage-tips--performance)
+13. [Security Frameworks Reference](#13-security-frameworks-reference)
+14. [Quick-Start Secure Configuration](#14-quick-start-secure-configuration)
+15. [References](#15-references)
 
 ---
 
@@ -586,7 +587,240 @@ Train developers on:
 
 ---
 
-## 9. Reducing Approval Fatigue Safely
+## 9. Network-Layer Traffic Scanning with Pipelock
+
+Sandboxing (Layer 2) controls *where* the agent can connect. Hooks (Layer 4) validate *which commands* run. But neither inspects the **content** of authorised outbound HTTPS requests. An allowed `curl` to a permitted domain can still exfiltrate secrets in the request body, query parameters, or headers — and nothing in the existing stack catches it.
+
+[Pipelock](https://github.com/luckyPipewrench/pipelock) fills this gap with **wire-level DLP (Data Loss Prevention) scanning**. It sits between the agent and the network, inspecting every outbound request for API keys, PII, credentials, and other sensitive data patterns — catching what the other layers miss.
+
+### 9.1 Prerequisites & Installation
+
+**Install via Homebrew (recommended):**
+```bash
+brew install luckyPipewrench/tap/pipelock
+```
+
+**Or via Go (requires Go 1.25+):**
+```bash
+go install github.com/luckyPipewrench/pipelock@latest
+```
+
+**Verify installation:**
+```bash
+pipelock version
+```
+
+### 9.2 Integration Mode 1: PreToolUse Hooks
+
+The fastest way to integrate Pipelock with Claude Code. A single command registers PreToolUse hooks that scan tool arguments before execution:
+
+```bash
+pipelock claude setup
+```
+
+This registers hooks that scan **Bash**, **WebFetch**, **Write**, **Edit**, and **all MCP tool calls** for sensitive data patterns. The generated configuration is added to `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pipelock scan --mode hook --tool bash"
+          }
+        ]
+      },
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pipelock scan --mode hook --tool webfetch"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pipelock scan --mode hook --tool write"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pipelock scan --mode hook --tool edit"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pipelock scan --mode hook --tool mcp"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Pipelock hooks **coexist** with any existing PreToolUse hooks — they do not replace them. Hook execution order follows the array order in the configuration.
+
+### 9.3 Integration Mode 2: MCP Proxy Wrapping
+
+Pipelock can wrap MCP server commands, scanning both **client-to-server requests** (DLP) and **server-to-client responses** (injection detection) bidirectionally.
+
+Configure in `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "pipelock",
+      "args": [
+        "wrap",
+        "--",
+        "npx", "@modelcontextprotocol/server-postgres"
+      ],
+      "env": {
+        "DATABASE_URL": "postgresql://user:pass@db:5432/mydb"
+      }
+    },
+    "github": {
+      "command": "pipelock",
+      "args": [
+        "wrap",
+        "--",
+        "npx", "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_TOKEN": "ghp_xxx"
+      }
+    }
+  }
+}
+```
+
+**What it scans:**
+- **Client → Server (DLP)**: Tool arguments checked for API keys, credentials, PII before reaching the MCP server
+- **Server → Client (injection)**: Server responses checked for prompt injection payloads and suspicious content before reaching the agent
+
+### 9.4 Integration Mode 3: Forward Proxy
+
+For full coverage of all outbound HTTPS traffic — including traffic that does not pass through Claude Code's tool system:
+
+```bash
+HTTPS_PROXY=http://127.0.0.1:9443 pipelock run -- claude
+```
+
+The forward proxy provides:
+- **11-layer URL scanner** — checks domain, path, query parameters, fragment, and encoded variants
+- **Request body inspection** — scans POST/PUT/PATCH payloads for sensitive data
+- **Optional TLS interception** — decrypt and inspect HTTPS content (disabled by default)
+
+If enabling TLS interception for Node.js-based tools, set the CA certificate:
+```bash
+export NODE_EXTRA_CA_CERTS="$(pipelock cert-path)"
+```
+
+> **Note**: Changing `forward_proxy.enabled` in `pipelock.yaml` requires a restart of the Pipelock process to take effect.
+
+### 9.5 Integration Mode Comparison
+
+| Mode | What's Scanned | What's Not Scanned | Setup Complexity | Best For |
+|------|---------------|-------------------|-----------------|----------|
+| **PreToolUse Hooks** | Tool arguments (Bash, WebFetch, Write, Edit, MCP) | Raw HTTPS traffic, response bodies | Low — single command | Quick setup, most common threats |
+| **MCP Proxy Wrapping** | MCP tool arguments + server responses | Non-MCP traffic, direct Bash network calls | Medium — per-server config | MCP-heavy workflows, response injection detection |
+| **Forward Proxy** | All outbound HTTPS traffic (requests + responses) | Non-HTTPS traffic, localhost connections | High — proxy + optional TLS certs | Maximum coverage, compliance requirements |
+
+For defence in depth, combine modes: use **PreToolUse hooks** for tool-level scanning and the **forward proxy** for full network coverage.
+
+### 9.6 Configuration
+
+Create `pipelock.yaml` in your project root (or use the built-in Claude Code preset):
+
+```yaml
+# pipelock.yaml
+preset: claude-code.yaml
+
+mode: warn           # warn | block — start with warn, switch to block once tuned
+enforce: true        # enable policy enforcement
+entropy_threshold: 5.0  # flag strings with Shannon entropy above this (API keys, tokens)
+
+explain_blocks: false   # if true, tells the agent WHY a request was blocked
+                        # WARNING: this leaks your policy rules to the agent
+
+response_actions:
+  high_confidence:   block   # definite secrets (AWS keys, GitHub tokens)
+  medium_confidence: ask     # probable secrets — prompt the user
+  low_confidence:    warn    # suspicious patterns — log but allow
+  injection:         strip   # remove prompt injection payloads from responses
+
+hot_reload: true    # pipelock watches pipelock.yaml and reloads on change
+```
+
+**Response actions:**
+- `warn` — log the match, allow the request to proceed
+- `block` — reject the request, return an error to the agent
+- `strip` — remove the matched content from the payload and forward
+- `ask` — pause execution and prompt the user for a decision
+
+Configuration changes are picked up automatically when `hot_reload: true` — no restart required (except for `forward_proxy.enabled`).
+
+### 9.7 Security Considerations
+
+**Policy leakage**: Setting `explain_blocks: true` tells the agent exactly *why* a request was blocked, including the matched pattern. A prompt injection could use this to craft payloads that evade detection. Keep `explain_blocks: false` in production.
+
+**Start with `warn` before `block`**: New deployments should run in `warn` mode to identify false positives. Review the logs, tune `entropy_threshold` and pattern lists, then switch to `block`.
+
+**Entropy threshold tuning**: The default `entropy_threshold: 5.0` catches most API keys and tokens (which typically have Shannon entropy > 5.5) while allowing normal code strings. Lower the threshold for stricter scanning (more false positives); raise it for fewer alerts (risk of missed secrets).
+
+**TLS interception is optional**: Forward proxy mode works without TLS interception — it inspects the plaintext HTTP CONNECT metadata (domain, port, SNI). Enable TLS interception only when you need to inspect encrypted request/response bodies. When enabled, set `NODE_EXTRA_CA_CERTS` for Node.js processes:
+```bash
+export NODE_EXTRA_CA_CERTS="$(pipelock cert-path)"
+```
+
+**Capability separation**: The agent holds secrets (via environment variables and MCP servers). Pipelock holds *none* — it only inspects traffic passing through it. This separation means a compromised Pipelock process cannot leak secrets it never possessed.
+
+**Kill switch**: Pipelock exposes a local API endpoint to immediately disable scanning in an emergency:
+```bash
+curl -X POST http://127.0.0.1:9443/api/v1/bypass
+```
+
+### 9.8 CI/CD Integration
+
+For pipeline scanning, use the [Pipelock GitHub Action](https://github.com/luckyPipewrench/pipelock-action):
+
+```yaml
+# .github/workflows/ci.yml
+- name: Scan outbound traffic
+  uses: luckyPipewrench/pipelock-action@v1
+  with:
+    mode: block
+    config: pipelock.yaml
+```
+
+This wraps your CI steps with the same DLP scanning applied locally, ensuring consistent policy enforcement across development and pipeline environments.
+
+**Why this matters**: Sandboxing controls *where* traffic goes. Permissions control *what tools* run. But without content inspection, an authorised request to an allowed domain can exfiltrate secrets in the payload body. Pipelock adds the missing layer — scanning *what's actually being sent* — completing the defence-in-depth model.
+
+> **NIST SP 800-53 SC-7 (Boundary Protection)**: Monitor and control communications at the external managed interfaces to the system and at key internal boundaries within the system.
+
+> **NIST SP 800-53 SC-8 (Transmission Confidentiality and Integrity)**: Protect the confidentiality and integrity of transmitted information.
+
+---
+
+## 10. Reducing Approval Fatigue Safely
 
 Approval fatigue leads to rubber-stamping — which is worse than no approvals at all. Here's how to reduce prompts while maintaining security.
 
@@ -672,11 +906,11 @@ Unless you're inside a container/VM, this removes all protection layers. A singl
 
 ---
 
-## 10. Context, Memory & Session Management
+## 11. Context, Memory & Session Management
 
 Losing context mid-task is a security and productivity risk — Claude may hallucinate project state, repeat mistakes, or forget constraints. This section covers how to keep Claude grounded in reality.
 
-### 10.1 Session Resuming
+### 11.1 Session Resuming
 
 **Resume the last session:**
 ```bash
@@ -713,7 +947,7 @@ claude --continue --fork-session
 
 > **Tip**: Name sessions before ending them. "Session from 3 days ago" is useless — `auth-refactor-v2` is findable.
 
-### 10.2 What Survives What
+### 11.2 What Survives What
 
 Understanding what persists across each operation prevents surprises:
 
@@ -728,7 +962,7 @@ Understanding what persists across each operation prevents surprises:
 
 **The critical insight**: Anything you told Claude only in conversation **will be lost** on compaction. If it matters, put it in a file.
 
-### 10.3 Surviving Context Compression
+### 11.3 Surviving Context Compression
 
 Context compression happens automatically as the window fills up. Here's how to ensure nothing critical is lost.
 
@@ -794,7 +1028,7 @@ Don't modify anything.
 
 Subagents explore in isolated context and return only a summary.
 
-### 10.4 CLAUDE.md — The Project's Source of Truth
+### 11.4 CLAUDE.md — The Project's Source of Truth
 
 CLAUDE.md is **always loaded at session start**, **survives compression**, and is **re-read from disk after `/compact`**. Use it to anchor Claude in your actual project state.
 
@@ -844,7 +1078,7 @@ CLAUDE.md is **always loaded at session start**, **survives compression**, and i
 - Don't write essays — keep each section concise and scannable
 - Don't let it grow past ~200 lines — split into `.claude/rules/` files
 
-### 10.5 Auto Memory — Cross-Session Persistence
+### 11.5 Auto Memory — Cross-Session Persistence
 
 Claude Code maintains a memory directory at `~/.claude/projects/<project>/memory/` that persists across sessions.
 
@@ -877,7 +1111,7 @@ Claude Code maintains a memory directory at `~/.claude/projects/<project>/memory
 
 CLAUDE.md is for the **project** (shared, checked in). Auto memory is for the **developer** (local, personal).
 
-### 10.6 `.claude/rules/` — Organised, Scoped Instructions
+### 11.6 `.claude/rules/` — Organised, Scoped Instructions
 
 For projects with many rules, split them into topic files:
 
@@ -904,7 +1138,7 @@ paths:
 - Rate limit: 100 req/min per user
 ```
 
-### 10.7 Keeping Claude Grounded in Reality
+### 11.7 Keeping Claude Grounded in Reality
 
 The biggest risk isn't Claude forgetting — it's Claude **remembering wrong**. Claude may hallucinate file paths, function signatures, or project structure based on patterns from training data instead of your actual codebase.
 
@@ -943,7 +1177,7 @@ The biggest risk isn't Claude forgetting — it's Claude **remembering wrong**. 
 
 7. **Check `/mcp` for context cost.** MCP servers add tool definitions that consume space before you start working. Disable servers you're not actively using.
 
-### 10.8 Workflow for Long Tasks
+### 11.8 Workflow for Long Tasks
 
 For tasks spanning multiple sessions:
 
@@ -972,11 +1206,11 @@ Session 3: Implement phase 2
 
 ---
 
-## 11. Usage Tips & Performance
+## 12. Usage Tips & Performance
 
 Beyond security, these tips help you get better results faster and reduce costs.
 
-### 11.1 Plan Mode — Think Before Coding
+### 12.1 Plan Mode — Think Before Coding
 
 Use Plan Mode for complex tasks. Skip it for one-line fixes.
 
@@ -993,7 +1227,7 @@ Or press `Shift+Tab` during a session to toggle modes.
 4. Switch to Normal Mode (`Shift+Tab`)
 5. *"Implement the plan"*
 
-### 11.2 Extended Thinking
+### 12.2 Extended Thinking
 
 Extended thinking lets Claude reason internally before responding. Worth it for complex tasks, wasteful for simple ones.
 
@@ -1009,7 +1243,7 @@ Extended thinking lets Claude reason internally before responding. Worth it for 
 
 **Trigger high effort ad-hoc:** Include "ultrathink" in your prompt.
 
-### 11.3 Model Selection
+### 12.3 Model Selection
 
 ```
 /model    # switch during session, arrow keys to adjust effort
@@ -1024,7 +1258,7 @@ Extended thinking lets Claude reason internally before responding. Worth it for 
 
 **Rule of thumb:** Start with Sonnet. Switch to Opus when you need deeper reasoning. Use Haiku for subagents.
 
-### 11.4 Custom Subagents
+### 12.4 Custom Subagents
 
 Beyond the built-in subagents used for context isolation (see [Section 10.3](#103-surviving-context-compression)), you can create custom ones in `.claude/agents/code-reviewer.md`:
 
@@ -1042,7 +1276,7 @@ Run git diff to see changes, then review each modified file.
 
 Invoke with: *"Use the code-reviewer to check my changes"*
 
-### 11.5 Headless / Non-Interactive Mode
+### 12.5 Headless / Non-Interactive Mode
 
 Use `-p` for automation, CI/CD, and scripting:
 
@@ -1066,7 +1300,7 @@ claude -p "Run tests and fix failures" \
   --allowedTools "Bash(npm run *),Read,Edit"
 ```
 
-### 11.6 Custom Skills (Slash Commands)
+### 12.6 Custom Skills (Slash Commands)
 
 Create reusable workflows as skills.
 
@@ -1099,7 +1333,7 @@ Migrate $0 from $1 to $2. Preserve behaviour and tests.
 
 Invoke: `/migrate SearchBar React Vue`
 
-### 11.7 MCP Servers for Productivity
+### 12.7 MCP Servers for Productivity
 
 Beyond security proxying, MCP servers give Claude access to external tools:
 
@@ -1128,7 +1362,7 @@ claude mcp list              # list all
 
 **Tip:** Disable MCP servers you're not actively using — each one adds tool definitions that consume context.
 
-### 11.8 Keyboard Shortcuts Reference
+### 12.8 Keyboard Shortcuts Reference
 
 **Navigation & Control:**
 
@@ -1163,7 +1397,7 @@ claude mcp list              # list all
 | `@` | File/folder mention autocomplete |
 | `/btw` | Side question (doesn't add to history) |
 
-### 11.9 Cost Optimisation
+### 12.9 Cost Optimisation
 
 ```bash
 /cost       # see token usage and cost
@@ -1182,7 +1416,7 @@ claude mcp list              # list all
 
 **Typical costs:** ~$6/developer/day average, <$12/day at 90th percentile.
 
-### 11.10 Git Workflows
+### 12.10 Git Workflows
 
 **Commits:**
 ```
@@ -1205,7 +1439,7 @@ claude --worktree feature-auth    # isolated copy of repo
 
 Each worktree has its own files, branch, and Claude session — prevents conflicts between parallel tasks.
 
-### 11.11 Image and Screenshot Input
+### 12.11 Image and Screenshot Input
 
 **Add images:** drag-and-drop into the terminal, paste with `Ctrl+V`/`Cmd+V`, or reference a path.
 
@@ -1227,7 +1461,7 @@ List differences and fix them."
 "Read pages 5-10 of @docs/spec.pdf and summarise the API requirements"
 ```
 
-### 11.12 Common Pitfalls and Fixes
+### 12.12 Common Pitfalls and Fixes
 
 See also [Section 10.7](#107-keeping-claude-grounded-in-reality) for anti-hallucination strategies.
 
@@ -1240,9 +1474,9 @@ See also [Section 10.7](#107-keeping-claude-grounded-in-reality) for anti-halluc
 
 ---
 
-## 12. Security Frameworks Reference
+## 13. Security Frameworks Reference
 
-### 12.1 NIST AI Risk Management Framework (AI RMF 1.0)
+### 13.1 NIST AI Risk Management Framework (AI RMF 1.0)
 
 Four core functions:
 
@@ -1253,7 +1487,7 @@ Four core functions:
 | **MEASURE** | Track metrics: vulnerabilities introduced, secret exposures, false suggestions |
 | **MANAGE** | Deploy controls (this guide), define incident response for AI security events |
 
-### 12.2 NIST SP 800-53 Rev. 5 — Key Controls
+### 13.2 NIST SP 800-53 Rev. 5 — Key Controls
 
 | Control | Title | Application |
 |---------|-------|-------------|
@@ -1270,7 +1504,7 @@ Four core functions:
 | **SI-10** | Input Validation | Review AI outputs before integration |
 | **SR-3** | Supply Chain Controls | Assess MCP servers, model providers, plugins |
 
-### 12.3 ISO/IEC 42001:2023 — AI Management System
+### 13.3 ISO/IEC 42001:2023 — AI Management System
 
 The first certifiable AI management system standard:
 
@@ -1279,7 +1513,7 @@ The first certifiable AI management system standard:
 - **Clause 9 (Performance Evaluation)**: Monitor AI tool usage metrics, conduct internal audits
 - **Clause 10 (Improvement)**: Continual improvement based on incidents and near-misses
 
-### 12.4 ISO/IEC 27001/27002 — Information Security Controls
+### 13.4 ISO/IEC 27001/27002 — Information Security Controls
 
 | Control | Application |
 |---------|-------------|
@@ -1291,7 +1525,7 @@ The first certifiable AI management system standard:
 | **A.5.19-A.5.22** | Supplier relationship security for AI tool vendors |
 | **A.6.3** | Developer training on AI tool risks |
 
-### 12.5 OWASP Top 10 for LLM Applications (2025)
+### 13.5 OWASP Top 10 for LLM Applications (2025)
 
 | # | Risk | Mitigation in Claude Code |
 |---|------|---------------------------|
@@ -1305,7 +1539,7 @@ The first certifiable AI management system standard:
 | **LLM09** | Misinformation | Human review, tests, `plan` mode for exploration |
 | **LLM10** | Unbounded Consumption | Session monitoring, timeout configuration |
 
-### 12.6 Zero Trust Principles for AI Agents
+### 13.6 Zero Trust Principles for AI Agents
 
 Based on CSA Agentic Trust Framework:
 
@@ -1318,7 +1552,7 @@ Based on CSA Agentic Trust Framework:
 
 ---
 
-## 13. Quick-Start Secure Configuration
+## 14. Quick-Start Secure Configuration
 
 ### Minimum Viable Security (Individual Developer)
 
@@ -1421,7 +1655,7 @@ Add to the above:
 
 ---
 
-## 14. References
+## 15. References
 
 ### Standards & Frameworks
 - [NIST AI Risk Management Framework (AI RMF 1.0)](https://www.nist.gov/itl/ai-risk-management-framework)
