@@ -1,0 +1,356 @@
+{
+  "feature": "Add network-layer traffic scanning with Pipelock",
+  "workflow_type": "feature",
+  "workflow_rationale": "This adds entirely new documentation content (a new security capability section with three integration modes, configuration examples, and architecture diagram updates) to an existing guide. It does not refactor, fix bugs, or migrate infrastructure — it introduces a new concept and its implementation details.",
+  "phases": [
+    {
+      "id": "phase-1-core-section",
+      "name": "Core Pipelock Section",
+      "type": "implementation",
+      "description": "Create the main new section documenting Pipelock as network-layer traffic scanning. This is the largest content block: concept explanation, all three integration modes (PreToolUse hooks, MCP proxy wrapping, forward proxy), configuration examples (pipelock.yaml, .mcp.json, .claude/settings.json), integration mode comparison table, security considerations/gotchas, and NIST/ISO framework references. Positioned after Section 8 (Layer 6 — Governance) as a new Section 9.",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Write the complete new Pipelock section in readme.md after Section 8 (Layer 6 — Governance, ending at line ~587) and before the current Section 9 (Reducing Approval Fatigue, starting at line ~589). The new section should be numbered '9. Network-Layer Traffic Scanning with Pipelock' and must include:\n\n1. **Section header and concept** (H2): Explain the gap — sandboxing controls destinations, hooks validate commands, but neither inspects the content of authorised outbound HTTPS requests. Pipelock fills this gap with wire-level DLP scanning.\n\n2. **Subsection 9.1 — Prerequisites & Installation** (H3): Installation commands (brew, go install), version check (pipelock version), Go 1.25+ requirement for source builds.\n\n3. **Subsection 9.2 — Integration Mode 1: PreToolUse Hooks** (H3): `pipelock claude setup` command, what it registers (PreToolUse hooks scanning Bash, WebFetch, Write, Edit, all MCP tools), JSON config example showing the hook in .claude/settings.json, note that hooks coexist with existing PreToolUse hooks.\n\n4. **Subsection 9.3 — Integration Mode 2: MCP Proxy Wrapping** (H3): Configuration in .mcp.json, wrapping MCP server commands with bidirectional scanning, JSON config example, what it scans (client DLP + server response injection).\n\n5. **Subsection 9.4 — Integration Mode 3: Forward Proxy** (H3): HTTPS_PROXY environment variable, pipelock run command, 11-layer URL scanner, optional TLS interception, note about restart requirement for forward_proxy.enabled.\n\n6. **Subsection 9.5 — Integration Mode Comparison** (H3): Table with columns: Mode | What's Scanned | What's Not Scanned | Setup Complexity | Best For.\n\n7. **Subsection 9.6 — Configuration** (H3): pipelock.yaml example using claude-code.yaml preset, key settings (mode, enforce, entropy_threshold, explain_blocks), response actions (warn/block/strip/ask), hot reload behaviour.\n\n8. **Subsection 9.7 — Security Considerations** (H3): explain_blocks: true leaks policy, start with warn before block, entropy_threshold tuning, TLS interception optional + NODE_EXTRA_CA_CERTS for Node.js, capability separation principle (agent holds secrets, Pipelock holds none), kill switch API.\n\n9. **Subsection 9.8 — CI/CD Integration** (H3): Reference the Pipelock GitHub Action for pipeline scanning.\n\n10. **'Why this matters' block** and **NIST SC-7 (Boundary Protection) / SC-8 (Transmission Confidentiality)** blockquote references.\n\nFollow existing patterns from Section 4 (Sandboxing) and Section 6 (Hooks). Use British spelling throughout. All JSON/YAML examples must be syntactically valid and use realistic values.",
+          "service": "docs",
+          "files_to_modify": [
+            "readme.md"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "readme.md Section 4 (Layer 2 — Sandboxing) for section structure pattern",
+            "readme.md Section 6 (Layer 4 — Hooks) for hook-based integration with JSON config",
+            "readme.md Section 3 (Layer 1 — Secret Protection) for threat scenario → control → verification pattern"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "grep -c 'Pipelock\\|pipelock' readme.md",
+            "expected": "At least 15 mentions of Pipelock in the file (section header, subsections, config examples, comparison table)"
+          },
+          "acceptance_criteria": [
+            "New section exists after current Section 8 with H2 header mentioning Pipelock or network-layer scanning",
+            "All three integration modes have their own H3 subsection with setup commands and config examples",
+            "Comparison table exists with columns for mode, what's scanned, what's not scanned, setup complexity",
+            "pipelock.yaml configuration example using claude-code.yaml preset is present",
+            ".mcp.json configuration example for MCP proxy wrapping is present",
+            ".claude/settings.json hook configuration example is present",
+            "At least one 'Why this matters' block with threat scenario",
+            "At least one NIST or ISO reference in blockquote format",
+            "British spelling used throughout (defence, authorised, behaviour)",
+            "All JSON/YAML code blocks are syntactically valid",
+            "Security gotchas subsection covers: explain_blocks, TLS interception, warn mode, entropy threshold"
+          ],
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-diagram-toc",
+      "name": "Architecture Diagram and Table of Contents Updates",
+      "type": "implementation",
+      "description": "Update the Defence in Depth Architecture ASCII diagram (Section 2) to include network-layer scanning, update the Table of Contents to reference the new section, and renumber sections 9-14 to 10-15 since the new Pipelock section takes the Section 9 slot.",
+      "depends_on": [
+        "phase-1-core-section"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Update the Table of Contents (lines 13-28) to include the new section and renumber subsequent sections. The new ToC should read:\n\n1. Threat Model\n2. Defence in Depth Architecture\n3. Layer 1 — Secret Protection\n4. Layer 2 — Sandboxing & Isolation\n5. Layer 3 — Permission Controls\n6. Layer 4 — Hooks & Policy Enforcement\n7. Layer 5 — Audit & Monitoring\n8. Layer 6 — Governance & Code Quality Gates\n9. Network-Layer Traffic Scanning with Pipelock (NEW)\n10. Reducing Approval Fatigue Safely (was 9)\n11. Context, Memory & Session Management (was 10)\n12. Usage Tips & Performance (was 11)\n13. Security Frameworks Reference (was 12)\n14. Quick-Start Secure Configuration (was 13)\n15. References (was 14)\n\nAlso update ALL section headers and internal cross-references throughout the document to match the new numbering. This means:\n- Section 9 header becomes '## 10. Reducing Approval Fatigue Safely'\n- Section 10 becomes '## 11. Context, Memory & Session Management'\n- And so on through Section 14 → 15\n- All anchor links in the ToC must match the new header anchors\n- Any internal links referencing old section numbers (e.g., '[Section 10.4](#104-claudemd...)') must be updated to new numbers (e.g., '[Section 11.4](#114-claudemd...)')\n\nSearch for all cross-references using patterns like 'Section N', '#N-', '#N.', '(see [Section' to ensure nothing is missed.",
+          "service": "docs",
+          "files_to_modify": [
+            "readme.md"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "readme.md lines 13-28 for existing ToC format"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "grep -n '## [0-9]' readme.md | head -20",
+            "expected": "All section headers numbered sequentially from 1 to 15 with no gaps"
+          },
+          "acceptance_criteria": [
+            "ToC has 15 entries numbered sequentially",
+            "New entry for Pipelock/network-layer scanning at position 9",
+            "All ToC anchor links resolve to actual section headers",
+            "All section headers (## N.) renumbered correctly from 9-14 to 10-15",
+            "All internal cross-references updated (e.g., Section 10.3 → 11.3, #104- → #114-)",
+            "No orphaned links or broken references"
+          ],
+          "status": "completed",
+          "notes": "Updated 4 internal cross-references from Section 10.x to Section 11.x to match new numbering. ToC and section headers were already correct.",
+          "updated_at": "2026-03-29T01:16:56.993953+00:00"
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Update the Defence in Depth Architecture ASCII diagram in Section 2 (lines 51-65) to include a new row for network-layer traffic scanning. The diagram currently shows 6 layers from Layer 6 (top) to Layer 1 (bottom). Add a new row for Pipelock network scanning. Position it logically — it sits between the network boundary (Layer 2 Sandbox) and the hooks layer (Layer 4), or as a complementary capability alongside the existing stack. The new row should follow the existing format:\n\n```\n├─────────────────────────────────────────────────────────┤\n│  Network: Pipelock — wire-level DLP, content scanning   │\n```\n\nAlso update the explanatory text below the diagram to mention the new capability. Keep the diagram clean and aligned — match the exact box-drawing character width of existing rows.",
+          "service": "docs",
+          "files_to_modify": [
+            "readme.md"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "readme.md lines 51-67 for existing ASCII diagram format"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "grep -i 'pipelock\\|network.*scanning\\|wire-level\\|content.*inspection' readme.md | head -10",
+            "expected": "At least one match in the architecture diagram area (Section 2)"
+          },
+          "acceptance_criteria": [
+            "ASCII diagram has a new row mentioning Pipelock or network-layer scanning",
+            "New row uses the same box-drawing characters and width as existing rows",
+            "Diagram remains properly aligned and readable",
+            "Explanatory text updated to reference the new capability"
+          ],
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-quickstart-refs",
+      "name": "Quick-Start and References Updates",
+      "type": "implementation",
+      "description": "Add Pipelock setup to the Quick-Start Secure Configuration section and add Pipelock references to the References section.",
+      "depends_on": [
+        "phase-2-diagram-toc"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Update the Quick-Start Secure Configuration section (now Section 14 after renumbering) to include Pipelock setup. Add to each tier:\n\n**Minimum Viable Security (Individual Developer):**\nAdd a note after the config block: 'Optional: Add network-layer traffic scanning with `pipelock claude setup` (see [Section 9](#9-network-layer-traffic-scanning-with-pipelock))'\n\n**Recommended Security (Team):**\nAdd Pipelock hook integration to the hooks section of the JSON config example, alongside the existing security-validator.sh hook. Also add a brief note about recommending the claude-code.yaml preset.\n\n**Maximum Security (Enterprise/Regulated):**\nAdd to the bullet list: 'Pipelock with forward proxy mode for full HTTPS content inspection' and 'Pipelock MCP proxy wrapping for bidirectional MCP traffic scanning'.\n\nFollow the existing Quick-Start pattern — keep additions concise and actionable.",
+          "service": "docs",
+          "files_to_modify": [
+            "readme.md"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "readme.md Quick-Start section for three-tier pattern"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "grep -A 2 'pipelock' readme.md | grep -i 'quick-start\\|minimum\\|recommended\\|maximum\\|enterprise\\|individual\\|team' || grep -c 'pipelock claude setup' readme.md",
+            "expected": "At least one mention of 'pipelock claude setup' in the Quick-Start area"
+          },
+          "acceptance_criteria": [
+            "Pipelock mentioned in at least the Minimum and Recommended tiers of Quick-Start",
+            "Enterprise tier mentions forward proxy and MCP proxy modes",
+            "Cross-reference link to the new Pipelock section is present",
+            "Additions are concise and follow existing Quick-Start style"
+          ],
+          "status": "completed"
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Add Pipelock references to the References section (now Section 15 after renumbering). Add a new subsection or entries under existing subsections:\n\n**Under 'Additional Resources' or as new 'Network Security Tools' subsection:**\n- [Pipelock — AI Agent Firewall](https://github.com/luckyPipewrench/pipelock)\n- [Pipelock Claude Code Integration Guide](https://github.com/luckyPipewrench/pipelock/blob/main/docs/guides/claude-code.md)\n- [Pipelock GitHub Action](https://github.com/marketplace/actions/pipelock-agent-security-scan)\n\nFollow the existing link format: `- [Title](URL)`",
+          "service": "docs",
+          "files_to_modify": [
+            "readme.md"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "readme.md References section for link format"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "grep 'luckyPipewrench\\|pipelock' readme.md | grep -c 'http'",
+            "expected": "At least 2 Pipelock reference URLs in the References section"
+          },
+          "acceptance_criteria": [
+            "At least 2 Pipelock reference links added to the References section",
+            "Links use the existing markdown link format",
+            "GitHub repo URL and Claude Code integration guide URL are included"
+          ],
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-integration",
+      "name": "Final Verification and Polish",
+      "type": "integration",
+      "description": "Verify the complete document renders correctly, all internal links resolve, content is consistent, and no regressions exist in existing content.",
+      "depends_on": [
+        "phase-3-quickstart-refs"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Final verification of the complete readme.md:\n\n1. **Line count check**: Run `wc -l readme.md` — expect ~1550-1650 lines (original 1452 + ~100-200 new lines)\n2. **Section numbering**: Verify all 15 section headers are numbered sequentially with `grep '## [0-9]' readme.md`\n3. **ToC link verification**: For each ToC entry, verify the anchor link matches an actual heading in the document\n4. **Internal cross-references**: Search for all `(#` patterns and verify each resolves to a heading\n5. **British spelling check**: Search for American spellings that should be British: grep for 'defense ' (should be defence), 'authorized' (should be authorised), 'behavior ' (should be behaviour)\n6. **Config syntax**: Visually verify that all JSON code blocks are valid (balanced braces, proper commas)\n7. **Pipelock content completeness**: Verify all three integration modes appear, comparison table exists, at least one NIST/ISO reference, security gotchas section exists\n8. **No regressions**: Verify existing sections are intact — spot-check Section 4 (Sandboxing) and Section 6 (Hooks) content hasn't been accidentally modified\n9. **Markdown formatting**: Check for unclosed code blocks, broken table formatting, orphaned horizontal rules",
+          "all_services": true,
+          "files_to_modify": [
+            "readme.md"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "wc -l readme.md && echo '---' && grep -c '## [0-9]' readme.md && echo '---' && grep -ci 'pipelock' readme.md && echo '---' && grep -ci 'defense \\|authorized\\|behavior ' readme.md",
+            "expected": "Line count ~1550-1650, 15 section headers, 15+ Pipelock mentions, 0 American spellings"
+          },
+          "acceptance_criteria": [
+            "Line count increased by ~100-200 lines from original 1452",
+            "Exactly 15 ## section headers numbered sequentially",
+            "All ToC anchor links resolve to actual headings",
+            "No orphaned internal cross-references",
+            "British spelling used throughout new content (0 American variants)",
+            "All JSON/YAML code blocks have balanced syntax",
+            "Three integration modes documented",
+            "Comparison table present",
+            "At least one NIST/ISO framework reference",
+            "Security considerations/gotchas section present",
+            "Quick-Start section references Pipelock",
+            "References section includes Pipelock URLs",
+            "Architecture diagram includes network-layer scanning",
+            "No regressions in existing content"
+          ],
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 4,
+    "total_subtasks": 6,
+    "services_involved": [
+      "docs"
+    ],
+    "estimated_new_lines": "100-200 lines of new markdown content",
+    "parallelism": {
+      "max_parallel_phases": 1,
+      "parallel_groups": [],
+      "recommended_workers": 1,
+      "speedup_estimate": "No parallelism — single file (readme.md) modified in all phases, sequential execution required"
+    },
+    "startup_command": "source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 001 --parallel 1"
+  },
+  "verification_strategy": {
+    "risk_level": "low",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": [
+      "unit"
+    ],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "All existing content intact (no regressions)",
+      "New section exists with all required subsections",
+      "All three integration modes documented with config examples",
+      "Architecture diagram updated",
+      "Table of Contents updated and links work",
+      "Section renumbering and cross-references correct",
+      "Comparison table included",
+      "Quick-Start section updated",
+      "References section updated",
+      "British spelling used throughout",
+      "At least one NIST/ISO framework reference",
+      "All config examples syntactically valid",
+      "Markdown renders correctly"
+    ],
+    "verification_steps": [
+      {
+        "name": "Line Count Check",
+        "command": "wc -l readme.md",
+        "expected_outcome": "~1550-1650 lines (original 1452 + new content)",
+        "type": "test",
+        "required": true,
+        "blocking": false
+      },
+      {
+        "name": "Section Count",
+        "command": "grep -c '## [0-9]' readme.md",
+        "expected_outcome": "15 (original 14 + 1 new section)",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Pipelock Content Presence",
+        "command": "grep -ci 'pipelock' readme.md",
+        "expected_outcome": "15+ mentions across section header, subsections, config, table, references",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Three Integration Modes",
+        "command": "grep -c 'PreToolUse\\|MCP Proxy\\|Forward Proxy\\|HTTPS_PROXY' readme.md",
+        "expected_outcome": "At least 6 mentions (each mode referenced multiple times)",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "British Spelling Check",
+        "command": "grep -cin 'defense \\|authorized\\|behavior ' readme.md",
+        "expected_outcome": "0 (no American spellings in new content)",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Framework References",
+        "command": "grep -c 'SC-7\\|SC-8\\|NIST.*800-53' readme.md",
+        "expected_outcome": "At least 2 more than original (new SC-7 and SC-8 references)",
+        "type": "test",
+        "required": true,
+        "blocking": false
+      }
+    ],
+    "reasoning": "Low risk documentation-only change. Validation focuses on content completeness, structural integrity (section numbering, cross-references, ToC links), pattern compliance (British spelling, framework refs), and regression prevention (existing content intact). No security scanning needed since no executable code is added."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": [
+        "wc -l readme.md",
+        "grep -c '## [0-9]' readme.md",
+        "grep -ci 'pipelock' readme.md"
+      ],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": [
+        "grep -n '## [0-9]' readme.md",
+        "grep -c 'PreToolUse\\|MCP Proxy\\|Forward Proxy\\|HTTPS_PROXY' readme.md",
+        "grep -cin 'defense \\|authorized\\|behavior ' readme.md"
+      ],
+      "services_to_test": [
+        "docs"
+      ]
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [],
+      "flows": []
+    },
+    "browser_verification": {
+      "required": false,
+      "pages": []
+    },
+    "database_verification": {
+      "required": false,
+      "checks": []
+    }
+  },
+  "qa_signoff": null,
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "xstateState": "coding",
+  "executionPhase": "coding",
+  "updated_at": "2026-03-29T01:20:33.908Z",
+  "lastEvent": {
+    "eventId": "4bac379a-6e71-45e8-8b3a-aaceb65c4375",
+    "sequence": 0,
+    "type": "PLANNING_COMPLETE",
+    "timestamp": "2026-03-29T01:12:16.759351+00:00"
+  },
+  "last_updated": "2026-03-29T01:16:56.993962+00:00"
+}
