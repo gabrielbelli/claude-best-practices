@@ -1,0 +1,71 @@
+=== AUTO-BUILD PROGRESS ===
+
+Project: Add Network-Layer Traffic Scanning with Pipelock
+Workspace: /Users/belli/Projects/claude-best-practices
+Started: 2026-03-28
+
+Workflow Type: feature
+Rationale: Adds entirely new documentation content (a new security capability section) to an existing guide. Not a refactor, bug fix, or migration.
+
+Session 1 (Planner):
+- Created implementation_plan.json
+- Phases: 4
+- Total subtasks: 6
+- Created init.sh
+- Created/updated project_index.json
+- Created/updated context.json
+
+Phase Summary:
+- Phase 1 (Core Pipelock Section): 1 subtask, depends on nothing
+  → Write the complete new section with all 3 integration modes, config examples, comparison table, security gotchas, NIST/ISO refs
+- Phase 2 (Architecture Diagram & ToC): 2 subtasks, depends on Phase 1
+  → Update ToC + renumber sections 9-14 → 10-15 + update all cross-references
+  → Update ASCII architecture diagram with new network-layer scanning row
+- Phase 3 (Quick-Start & References): 2 subtasks, depends on Phase 2
+  → Add Pipelock to Quick-Start three-tier config (individual/team/enterprise)
+  → Add Pipelock reference links to References section
+- Phase 4 (Final Verification): 1 subtask, depends on Phase 3
+  → Verify line count, section numbering, cross-references, British spelling, config syntax, no regressions
+
+Services Involved:
+- docs (readme.md): All changes are documentation-only within this single file
+
+Parallelism Analysis:
+- Max parallel phases: 1
+- Recommended workers: 1
+- Parallel groups: None (all phases modify the same file — readme.md)
+
+Key Implementation Notes:
+- This is documentation-only — no application code
+- British spelling required: defence, authorised, behaviour, organisation
+- Section pattern: concept → config example → "Why this matters" → NIST/ISO ref
+- New section inserted after Layer 6 (Section 8), renumbering sections 9-14 → 10-15
+- Three Pipelock integration modes: PreToolUse hooks, MCP proxy wrapping, forward proxy
+- Recommended preset: claude-code.yaml (balanced mode, block action)
+- Critical gotcha: explain_blocks: true leaks policy to agent — must document warning
+
+=== STARTUP COMMAND ===
+
+To continue building this spec, run:
+
+  source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 001 --parallel 1
+
+Example:
+  source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 001 --parallel 1
+
+=== END SESSION 1 ===
+
+=== SESSION: subtask-4-1 (Final Verification) ===
+
+All verification checks passed:
+- Line count: 1703 lines (original 1452 + 251 new lines)
+- Section headers: 15 top-level sections numbered sequentially 1-15
+- ToC links: All 15 entries match actual headings
+- Internal cross-references: All (#...) links resolve correctly
+- British spelling: 0 American spellings found
+- Code blocks: 150 fences (even = all properly closed)
+- Pipelock content: 3 integration modes, comparison table, NIST/ISO refs, security considerations
+- No regressions: Sections 4 (Sandboxing) and 6 (Hooks) intact
+- Pipelock mentions: 40 total across document
+
+=== END subtask-4-1 ===
