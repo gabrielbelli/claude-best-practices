@@ -61,11 +61,13 @@ Before applying controls, understand what you're defending against:
 ├─────────────────────────────────────────────────────────┤
 │  Layer 2: Sandbox — filesystem + network isolation      │
 ├─────────────────────────────────────────────────────────┤
+│  Network: Pipelock — wire-level DLP, content scanning   │
+├─────────────────────────────────────────────────────────┤
 │  Layer 1: Secrets — deny rules, env vars, MCP proxying  │
 └─────────────────────────────────────────────────────────┘
 ```
 
-Each layer operates independently. If a prompt injection bypasses Layer 3 permissions, Layer 2 sandbox still blocks filesystem/network access at the OS level.
+Each layer operates independently. If a prompt injection bypasses Layer 3 permissions, Layer 2 sandbox still blocks filesystem/network access at the OS level. The Pipelock network scanning layer adds wire-level content inspection between the sandbox boundary and secret protection, providing DLP and data exfiltration prevention at the network layer.
 
 ---
 
