@@ -1696,3 +1696,8 @@ Add to the above:
 - [Least Privilege for AI Operations — Nightfall AI](https://www.nightfall.ai/ai-security-101/least-privilege-principle-in-ai-operations)
 - [Best Practices for Authorizing AI Agents — Oso](https://www.osohq.com/learn/best-practices-of-authorizing-ai-agents)
 - [Zero Trust Agent Architecture — Microsoft](https://techcommunity.microsoft.com/blog/educatordeveloperblog/zero-trust-agent-architecture-how-to-actually-secure-your-agents/4473995)
+
+### Network Security Tools
+- [Pipelock — AI Agent Firewall](https://github.com/luckyPipewrench/pipelock)
+- [Pipelock Claude Code Integration Guide](https://github.com/luckyPipewrench/pipelock/blob/main/docs/guides/claude-code.md)
+- [Pipelock GitHub Action](https://github.com/marketplace/actions/pipelock-agent-security-scan)
